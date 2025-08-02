@@ -9,15 +9,37 @@ passport.use(new GoogleStrategy({
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     const email = profile.emails[0].value;
-    // Allow any email for now
+    
     let user = await User.findOne({ googleId: profile.id });
+    
     if (!user) {
+      // Check if user should be admin
+      const isAdmin = email === 'admin@findmyseat.com' || 
+                     email.endsWith('@admin.findmyseat.com') ||
+                     email === 'anishkhachane2004@gmail.com';
+      
       user = await User.create({
         googleId: profile.id,
         email,
-        name: profile.displayName
+        name: profile.displayName,
+        role: isAdmin ? 'admin' : 'student',
+        lastLogin: new Date()
       });
+    } else {
+      user.lastLogin = new Date();
+      
+      // Update role if needed
+      const isAdmin = email === 'admin@findmyseat.com' || 
+                     email.endsWith('@admin.findmyseat.com') ||
+                     email === 'anishkhachane2004@gmail.com';
+      
+      if (isAdmin && user.role !== 'admin') {
+        user.role = 'admin';
+      }
+      
+      await user.save();
     }
+    
     return done(null, user);
   } catch (err) {
     return done(err, null);

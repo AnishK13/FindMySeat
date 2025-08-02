@@ -5,8 +5,21 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const passport = require('./config/passport');
 const seatsRoutes = require('./routes/seats');
+const adminRoutes = require('./routes/admin');
+const http = require('http');
+const socketIo = require('socket.io');
+const moment = require('moment');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
 app.set('trust proxy', 1);
 app.use(cors({
   origin: 'http://localhost:3000',
@@ -14,10 +27,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => console.log('MongoDB connected'))
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
 app.use(session({
@@ -31,6 +43,54 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Socket connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
+  socket.on('join-admin', () => {
+    socket.join('admin-room');
+    console.log('Admin joined real-time updates');
+  });
+  
+  socket.on('join-student', () => {
+    socket.join('student-room');
+    console.log('Student joined seat updates');
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Send real-time analytics updates
+const emitAnalyticsUpdate = async () => {
+  try {
+    const Booking = require('./models/Booking');
+    const Seat = require('./models/Seat');
+    const User = require('./models/User');
+    
+    const activeBookings = await Booking.find({
+      status: 'active',
+      endTime: { $gt: new Date() }
+    });
+    
+    const totalSeats = await Seat.countDocuments();
+    const occupancyRate = totalSeats > 0 ? (activeBookings.length / totalSeats) * 100 : 0;
+    
+    const analyticsData = {
+      activeBookings: activeBookings.length,
+      occupancyRate: Math.round(occupancyRate * 10) / 10,
+      timestamp: new Date()
+    };
+    
+    io.to('admin-room').emit('analytics-update', analyticsData);
+  } catch (error) {
+    console.error('Error emitting analytics update:', error);
+  }
+};
+
+setInterval(emitAnalyticsUpdate, 30000);
 
 app.get('/', (req, res) => {
   res.send('FindMySeat backend is running!');
@@ -55,9 +115,25 @@ app.get('/profile', (req, res) => {
   res.json({ user: req.user });
 });
 
+app.post('/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error during logout' });
+    }
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ message: 'Error destroying session' });
+      }
+      res.clearCookie('connect.sid');
+      res.json({ message: 'Logged out successfully' });
+    });
+  });
+});
+
 app.use('/api/seats', seatsRoutes);
+app.use('/api/admin', adminRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 }); 

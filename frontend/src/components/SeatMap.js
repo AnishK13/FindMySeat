@@ -1,6 +1,6 @@
 import React from 'react';
 
-// Layout grid based on the provided image (1 = seat, 0 = empty)
+// Reading hall layout - 1 = seat, 0 = empty
 const layout = [
     [1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
     [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
@@ -30,7 +30,6 @@ const layout = [
   
 
 const SeatMap = ({ seats, onSeatSelect, selectedSeatId }) => {
-  // Map seat positions to seat objects
   const seatMap = {};
   seats.forEach(seat => {
     seatMap[`${seat.position.row},${seat.position.col}`] = seat;

@@ -1,10 +1,8 @@
 const mongoose = require('mongoose');
 const Seat = require('../models/Seat');
-// require('dotenv').config();
 require('dotenv').config({ path: __dirname + '/../.env' });
 
-// Layout based on the provided image
-// 0 = empty, 1 = seat
+// Reading hall layout - 0 = empty, 1 = seat
 const layout = [
     [1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
     [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
@@ -33,10 +31,7 @@ const layout = [
   ];
 
 async function initSeats() {
-  await mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  });
+  await mongoose.connect(process.env.MONGO_URI);
   await Seat.deleteMany({});
   let count = 1;
   for (let row = 0; row < layout.length; row++) {
