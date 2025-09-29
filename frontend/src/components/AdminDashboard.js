@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { io } from 'socket.io-client';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,26 +41,33 @@ ChartJS.register(
 
 const AdminDashboard = ({ user, onLogout }) => {
   const [dashboardData, setDashboardData] = useState(null);
-  const [socket, setSocket] = useState(null);
+  const [eventSource, setEventSource] = useState(null);
   const [realTimeData, setRealTimeData] = useState({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    // Initialize Socket.io connection
-    const newSocket = io('http://localhost:5000');
-    setSocket(newSocket);
+    // Initialize SSE connection
+    const es = new EventSource('http://localhost:5000/events/admin', { withCredentials: true });
+    setEventSource(es);
 
-    newSocket.on('connect', () => {
-      console.log('Connected to server');
-      newSocket.emit('join-admin');
-    });
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setRealTimeData(data);
+      } catch (e) {
+        console.error('Error parsing SSE message', e);
+      }
+    };
 
-    newSocket.on('analytics-update', (data) => {
-      setRealTimeData(data);
-    });
+    es.onerror = (err) => {
+      console.warn('SSE connection error', err);
+      // Let the browser auto-reconnect
+    };
 
-    return () => newSocket.close();
+    return () => {
+      es.close();
+    };
   }, []);
 
   useEffect(() => {
