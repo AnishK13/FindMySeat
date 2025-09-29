@@ -5,12 +5,12 @@ const Booking = require('../models/Booking');
 const mongoose = require('mongoose');
 
 // Reading hall coordinates
-const HALL_LAT = 18.648061;
-const HALL_LON = 73.7595417;
-const MAX_DISTANCE_METERS = 1500;
+const HALL_LAT = 18.457918;
+const HALL_LON = 73.850601;
+const MAX_DISTANCE_METERS = 150000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Earth radius in meters
+  const R = 6371000; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a =

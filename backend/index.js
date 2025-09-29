@@ -7,18 +7,10 @@ const passport = require('./config/passport');
 const seatsRoutes = require('./routes/seats');
 const adminRoutes = require('./routes/admin');
 const http = require('http');
-const socketIo = require('socket.io');
 const moment = require('moment');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
 
 app.set('trust proxy', 1);
 app.use(cors({
@@ -44,22 +36,24 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Socket connection handling
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  
-  socket.on('join-admin', () => {
-    socket.join('admin-room');
-    console.log('Admin joined real-time updates');
-  });
-  
-  socket.on('join-student', () => {
-    socket.join('student-room');
-    console.log('Student joined seat updates');
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+// SSE: keep track of admin listeners
+const adminSseClients = new Set();
+
+app.get('/events/admin', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.flushHeaders && res.flushHeaders();
+
+  // Initial comment to establish stream
+  res.write(': connected\n\n');
+  adminSseClients.add(res);
+
+  req.on('close', () => {
+    adminSseClients.delete(res);
+    try { res.end(); } catch (_) {}
   });
 });
 
@@ -84,13 +78,30 @@ const emitAnalyticsUpdate = async () => {
       timestamp: new Date()
     };
     
-    io.to('admin-room').emit('analytics-update', analyticsData);
+    // Broadcast to all connected SSE admin clients
+    const payload = `data: ${JSON.stringify(analyticsData)}\n\n`;
+    for (const client of adminSseClients) {
+      try {
+        client.write(payload);
+      } catch (err) {
+        // Drop broken client
+        adminSseClients.delete(client);
+        try { client.end(); } catch (_) {}
+      }
+    }
   } catch (error) {
     console.error('Error emitting analytics update:', error);
   }
 };
 
 setInterval(emitAnalyticsUpdate, 30000);
+
+// Heartbeat to keep connections alive through proxies
+setInterval(() => {
+  for (const client of adminSseClients) {
+    try { client.write(': heartbeat\n\n'); } catch (_) {}
+  }
+}, 25000);
 
 app.get('/', (req, res) => {
   res.send('FindMySeat backend is running!');
