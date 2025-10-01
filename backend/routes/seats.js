@@ -3,6 +3,7 @@ const router = express.Router();
 const Seat = require('../models/Seat');
 const Booking = require('../models/Booking');
 const mongoose = require('mongoose');
+const { broadcastSeatDelta } = require('../utils/seatBroadcast');
 
 // Reading hall coordinates
 const HALL_LAT = 18.457918;
@@ -85,6 +86,8 @@ router.post('/book', ensureAuth, async (req, res) => {
   });
   seat.status = 'booked';
   await seat.save();
+  // Broadcast seat delta to students
+  broadcastSeatDelta({ seatId: seat.seatId, status: 'booked' });
   res.json({ message: 'Seat booked successfully', booking });
 });
 
@@ -101,6 +104,10 @@ router.post('/cancel', ensureAuth, async (req, res) => {
   await booking.save();
   booking.seat.status = 'available';
   await booking.seat.save();
+  // Broadcast seat delta to students
+  if (booking.seat && booking.seat.seatId) {
+    broadcastSeatDelta({ seatId: booking.seat.seatId, status: 'available' });
+  }
   res.json({ message: 'Booking cancelled.' });
 });
 

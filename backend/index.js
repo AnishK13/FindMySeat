@@ -36,8 +36,9 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// SSE: keep track of admin listeners
+// SSE: keep track of admin and student listeners
 const adminSseClients = new Set();
+const studentSseClients = new Set();
 
 app.get('/events/admin', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -53,6 +54,23 @@ app.get('/events/admin', (req, res) => {
 
   req.on('close', () => {
     adminSseClients.delete(res);
+    try { res.end(); } catch (_) {}
+  });
+});
+
+app.get('/events/seats', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.flushHeaders && res.flushHeaders();
+
+  res.write(': connected\n\n');
+  studentSseClients.add(res);
+
+  req.on('close', () => {
+    studentSseClients.delete(res);
     try { res.end(); } catch (_) {}
   });
 });

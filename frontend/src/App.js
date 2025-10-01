@@ -7,6 +7,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [seats, setSeats] = useState([]);
   const [selectedSeatId, setSelectedSeatId] = useState(null);
+  const [seatEs, setSeatEs] = useState(null);
   const [duration, setDuration] = useState(1);
   const [coords, setCoords] = useState(null);
   const [booking, setBooking] = useState(null);
@@ -45,11 +46,28 @@ function App() {
 
   useEffect(() => {
     if (user && loginType === 'student') {
-      fetch('http://localhost:5000/api/seats', { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-          // Find booking for this user
-        });
+      const es = new EventSource('http://localhost:5000/events/seats', { withCredentials: true });
+      setSeatEs(es);
+
+      es.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg && msg.type === 'seat-delta' && msg.delta) {
+            const { seatId, status } = msg.delta;
+            setSeats(prev => prev.map(s => s.seatId === seatId ? { ...s, status } : s));
+          }
+        } catch (e) {
+          console.error('Seat SSE parse error', e);
+        }
+      };
+
+      es.onerror = () => {
+        // Let browser handle reconnection
+      };
+
+      return () => {
+        es.close();
+      };
     }
   }, [user, loginType]);
 
